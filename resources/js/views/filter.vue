@@ -4,18 +4,20 @@
 
             <div class="form-group rtl my-2">
                 <label for="exampleFormControlInput1" class="form-label" >الاقسام الرئيسية</label>
-                <select class="form-select" @change="getSubCategories()" 
-                        v-model="selected_main_category">
-                    <option v-for="item in main_categories" :key="item.id" :value="item" v-text="item.name"></option>
-                </select>
+
+                <input class="form-control" @input="getSubCategories($event)" list="datalistOptionsMain" id="idMain" placeholder=" البحث عن الاقسام الرئيسية ">
+                <datalist id="datalistOptionsMain">
+                    <option v-for="item in main_categories" :key="item.id" :value="item.name" :data-object="JSON.stringify(item)"></option>
+                </datalist>
             </div>
 
             <div class="form-group rtl my-2">
                 <label for="exampleFormControlInput1" class="form-label" >الاقسام الفرعية</label>
-                <select class="form-select" @change="getMainOptions()"
-                                            v-model="selected_sub_category">
-                    <option v-for="item in sub_categories" :key="item.id" :value="item" v-text="item.name"></option>
-                </select>
+
+                <input class="form-control" @input="getMainOptions($event)" list="datalistOptionsSub" id="idSub" placeholder=" البحث عن الاقسام الفرعية ">
+                <datalist id="datalistOptionsSub">
+                    <option v-for="item in sub_categories" :key="item.id" :value="item.name" :data-object="JSON.stringify(item)"></option>
+                </datalist>
             </div>
 
             <div v-for="option in options" :key="option.id">
@@ -25,7 +27,7 @@
                     <label :for="'id' + option.id" class="form-label">{{option.name}}</label>
                     <input class="form-control" @input="setSelectedMainOptions($event, option)" :list="'datalistOptions'+ option.id" :id="'id' + option.id" :placeholder="' البحث عن ' + option.name">
                     <datalist :id="'datalistOptions'+ option.id">
-                        <option v-for="item in option.values" :key="item.id" :value="item.name" :data-id="item.id"></option>
+                        <option v-for="item in option.options" :key="item.id" :value="item.name" :data-id="item.id"></option>
                         <option value="other" data-id="0"></option>
                     </datalist>
                     
@@ -36,14 +38,14 @@
                 </div>
 
                 <div  v-for="sub_option in sub_options" :key="sub_option.id">
-                    <div  v-if="selected_options[option.id].selected_value_id == sub_option.value_id && selected_options[option.id].selected_value_id != 0">
+                    <div  v-if="selected_options[option.id].selected_value_id == sub_option.parent && selected_options[option.id].selected_value_id != 0">
                         
                         <div class="form-group rtl">
 
                             <label :for="'id' + sub_option.id" class="form-label">{{sub_option.name}}</label>
                             <input class="form-control" @input="setSelectedSubOptions($event, sub_option)" :list="'subdatalistOptions'+ sub_option.id" :id="'id' + sub_option.id" :placeholder="' البحث عن ' + sub_option.name">
                             <datalist :id="'subdatalistOptions'+ sub_option.id">
-                                <option v-for="sub_option_item in sub_option.values" :key="sub_option_item.id" :value="sub_option_item.name" :data-id="sub_option_item.id"></option>
+                                <option v-for="sub_option_item in sub_option.options" :key="sub_option_item.id" :value="sub_option_item.name" :data-id="sub_option_item.id"></option>
                                 <option value="other" data-id="0"></option>
                             </datalist>
 
@@ -87,7 +89,7 @@ export default {
     data() {
         return { 
             main_categories: [],
-            selected_main_category: null, 
+            selected_main_category: {}, 
             sub_categories: {},
             selected_sub_category: null, 
             options: {},
@@ -111,17 +113,19 @@ export default {
             url: 'http://127.0.0.1:8000/api/main_categories',
             method: 'get',
           }).then(res=> {
-            this.main_categories =  res.data.data
+            this.main_categories =  res.data.data.categories
           }).catch( error => {});      
         },
-        getSubCategories:function(){
-          axios({
-            url: `http://127.0.0.1:8000/api/sub_categories/${this.selected_main_category.id}`,
-            method: 'get',
-          }).then(res=> {
-            this.reset()                  
-            this.sub_categories =  res.data.data 
-          }).catch( error => {});      
+        getSubCategories:function(event){
+            
+            var value = event.target.value,  
+                datalist_selected = document.querySelectorAll(`#idMain + #datalistOptionsMain [value="${value}"]`);
+                if(datalist_selected.length > 0) {
+                    this.reset()      
+                    var select_option_object  = datalist_selected[0].getAttribute('data-object');
+                    this.selected_main_category = JSON.parse(select_option_object)
+                    this.sub_categories =  this.selected_main_category.children
+                }   
         },
         setSelectedOptionsKey:function(){
              var selected_options_array = {}
@@ -137,9 +141,23 @@ export default {
               this.selected_options = selected_options_array
 
         },
-        getMainOptions:function(){
-              this.options = this.selected_sub_category.options
-              this.setSelectedOptionsKey();
+        getMainOptions:function(event){
+
+             var value = event.target.value,  
+                datalist_selected = document.querySelectorAll(`#idSub + #datalistOptionsSub [value="${value}"]`);
+                if(datalist_selected.length > 0) {
+                    var select_option_object  = datalist_selected[0].getAttribute('data-object');
+                    this.selected_sub_category = JSON.parse(select_option_object)
+                }  
+
+            axios({
+                url: `http://127.0.0.1:8000/api/sub_categories/${this.selected_sub_category.id}`,
+                method: 'get',
+            }).then(res=> {
+                this.options = res.data.data
+                this.setSelectedOptionsKey();
+            }).catch( error => {});
+              
         },
         setSelectedMainOptions:function(event, option){   
             var value = event.target.value,  
@@ -167,6 +185,7 @@ export default {
                     url: `http://127.0.0.1:8000/api/sub_Options/${id}`,
                     method: 'get',
                 }).then(res=> {
+                    console.log(res.data)
                     if(!this.sub_options[res.data.data[0].id]){
                         if(res.data.data.length > 0){
                             this.sub_options[res.data.data[0].id] = res.data.data[0]
